@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ESP32-ETH01 機台藍芽控制器 (Bluefy)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --btn-off: #334155;
+      --btn-on: #10b981;
+      --btn-lift: #f59e0b;
+      --btn-reset: #ef4444;
+      --border: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .status-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      transition: background-color 0.3s;
+    }
+
+    .dot.connected {
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .btn-connect {
+      background-color: var(--accent);
+      color: #0f172a;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-connect:active {
+      opacity: 0.75;
+    }
+
+    /* 12 開關按鈕網格 */
+    .switch-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .switch-btn {
+      background-color: var(--btn-off);
+      color: var(--text-muted);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      height: 72px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 1.05rem;
+      font-weight: 700;
+      transition: all 0.15s ease-out;
+      user-select: none;
+    }
+
+    .switch-btn .sub-text {
+      font-size: 0.75rem;
+      margin-top: 4px;
+      opacity: 0.8;
+      font-weight: normal;
+    }
+
+    .switch-btn.on {
+      background-color: var(--btn-on);
+      border-color: #34d399;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+      transform: scale(0.98);
+    }
+
+    /* 特殊控制按鈕 (輔助) */
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .action-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 12px 6px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: white;
+      transition: opacity 0.2s;
+    }
+
+    .action-btn:active {
+      opacity: 0.7;
+    }
+
+    .btn-all-off {
+      background-color: #64748b;
+    }
+
+    .btn-lift {
+      background-color: var(--btn-lift);
+    }
+
+    .btn-reset {
+      background-color: var(--btn-reset);
+    }
+
+    /* 狀態記錄 */
+    .log-box {
+      background-color: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      height: 90px;
+      overflow-y: auto;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+
+    .hint {
+      margin-top: 12px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>機台藍芽控制面板</h1>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">ESP32-ETH01 + Bluefy Web Bluetooth</p>
+    </header>
+
+    <!-- 連線卡片 -->
+    <div class="status-card">
+      <div class="status-indicator">
+        <div id="dot" class="dot"></div>
+        <span id="status-text">未連線</span>
+      </div>
+      <button id="btn-connect" class="btn-connect" onclick="toggleConnect()">連線設備</button>
+    </div>
+
+    <!-- 12 開關獨立切換面板 -->
+    <div class="switch-grid" id="switch-grid">
+      <!-- 由 JS 動態生成 12 顆按鈕 -->
+    </div>
+
+    <!-- 輔助動作區 -->
+    <div class="actions">
+      <button class="action-btn btn-all-off" onclick="sendCmd('ALL_OFF')">全部開關 OFF</button>
+      <button class="action-btn btn-lift" onclick="sendCmd('LIFT')">網頁抬升</button>
+      <button class="action-btn btn-reset" onclick="sendCmd('RESET')">網頁重置</button>
+    </div>
+
+    <!-- 接收日誌 -->
+    <div id="log" class="log-box">系統就緒，請點擊上方「連線設備」連接 ESP32...</div>
+
+    <div class="hint">
+      * 建議使用 iOS <b>Bluefy App</b> 或支援 Web Bluetooth 之瀏覽器開啟。<br>
+      * 實體按鍵：<b>GPIO 35 抬升</b>、<b>GPIO 35+36 同時按重置</b>。
+    </div>
+  </div>
+
+  <script>
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+    let bluetoothDevice = null;
+    let bleCharacteristic = null;
+    let switchStates = new Array(12).fill(false);
+
+    // 建立 12 顆開關 UI
+    const grid = document.getElementById("switch-grid");
+    for (let i = 1; i <= 12; i++) {
+      const btn = document.createElement("div");
+      btn.className = "switch-btn";
+      btn.id = `sw-${i}`;
+      btn.innerHTML = `<div>開關 ${i}</div><div class="sub-text" id="sw-sub-${i}">OFF</div>`;
+      btn.onclick = () => toggleSwitch(i);
+      grid.appendChild(btn);
+    }
+
+    function log(msg) {
+      const box = document.getElementById("log");
+      const time = new Date().toLocaleTimeString();
+      box.textContent = `[${time}] ${msg}\n` + box.textContent;
+    }
+
+    // 更新 UI 狀態
+    function updateUI(statusString) {
+      for (let i = 0; i < 12; i++) {
+        const isOn = (statusString.charAt(i) === '1');
+        switchStates[i] = isOn;
+        const btn = document.getElementById(`sw-${i + 1}`);
+        const sub = document.getElementById(`sw-sub-${i + 1}`);
+        if (isOn) {
+          btn.classList.add("on");
+          sub.textContent = "ON";
+        } else {
+          btn.classList.remove("on");
+          sub.textContent = "OFF";
+        }
+      }
+    }
+
+    // 連線 / 斷開藍芽
+    async function toggleConnect() {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        disconnect();
+        return;
+      }
+
+      try {
+        log("正在掃描藍芽裝置 [ESP32-Machine-Ctrl]...");
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "ESP32-Machine-Ctrl" }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        log("正在連線至 GATT 伺服器...");
+        const server = await bluetoothDevice.gatt.connect();
+
+        log("正在獲取控制器服務...");
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
+        log("正在獲取通訊特徵值...");
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        // 啟動 Notification 即時監聽 ESP32 回傳狀態
+        await bleCharacteristic.startNotifications();
+        bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
+
+        // 讀取當前狀態
+        const initVal = await bleCharacteristic.readValue();
+        const initStr = new TextDecoder().decode(initVal);
+        if (initStr && initStr.length >= 12) {
+          updateUI(initStr);
+        }
+
+        document.getElementById("dot").classList.add("connected");
+        document.getElementById("status-text").textContent = "已連線";
+        document.getElementById("btn-connect").textContent = "中斷連線";
+        log("藍芽連線成功！");
+      } catch (err) {
+        log("連線失敗: " + err);
+        disconnect();
+      }
+    }
+
+    function handleNotification(event) {
+      const valStr = new TextDecoder().decode(event.target.value);
+      log("同步狀態: " + valStr);
+      if (valStr && valStr.length >= 12) {
+        updateUI(valStr);
+      }
+    }
+
+    function onDisconnected() {
+      document.getElementById("dot").classList.remove("connected");
+      document.getElementById("status-text").textContent = "未連線";
+      document.getElementById("btn-connect").textContent = "連線設備";
+      log("藍芽設備已中斷連線。");
+    }
+
+    function disconnect() {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        bluetoothDevice.gatt.disconnect();
+      }
+      onDisconnected();
+    }
+
+    // 點擊開關發送指令 (Toggle)
+    async function toggleSwitch(channel) {
+      if (!bleCharacteristic) {
+        alert("請先點擊上方「連線設備」連接藍芽！");
+        return;
+      }
+      await sendCmd(`T:${channel}`);
+    }
+
+    // 發送字串指令至 ESP32
+    async function sendCmd(cmd) {
+      if (!bleCharacteristic) {
+        alert("請先點擊上方「連線設備」連接藍芽！");
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        await bleCharacteristic.writeValue(encoder.encode(cmd));
+        log("已發送指令 ➡️ " + cmd);
+      } catch (err) {
+        log("發送指令失敗: " + err);
+      }
+    }
+  </script>
+</body>
+</html>
+
