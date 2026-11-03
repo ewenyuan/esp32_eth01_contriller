@@ -13,7 +13,7 @@
       --accent: #38bdf8;
       --btn-off: #334155;
       --btn-on: #10b981;
-      --btn-lift: #f59e0b;
+      --btn-forward: #f59e0b;
       --btn-reset: #ef4444;
       --border: #475569;
     }
@@ -169,8 +169,8 @@
       background-color: #64748b;
     }
 
-    .btn-lift {
-      background-color: var(--btn-lift);
+    .btn-forward {
+      background-color: var(--btn-forward);
     }
 
     .btn-reset {
@@ -225,8 +225,8 @@
     <!-- 輔助動作區 -->
     <div class="actions">
       <button class="action-btn btn-all-off" onclick="sendCmd('ALL_OFF')">全部開關 OFF</button>
-      <button class="action-btn btn-lift" onclick="sendCmd('LIFT')">機台前傾</button>
-      <button class="action-btn btn-reset" onclick="sendCmd('RESET')">機台重置</button>
+      <button class="action-btn btn-forward" onclick="sendCmd('LIFT')">機台前傾</button>
+      <button class="action-btn btn-reset" onclick="confirmReset()">機台重置</button>
     </div>
 
     <!-- 接收日誌 -->
@@ -234,7 +234,7 @@
 
     <div class="hint">
       * 建議使用 iOS <b>Bluefy App</b> 或支援 Web Bluetooth 之瀏覽器開啟。<br>
-      * 實體按鍵：<b>GPIO 35 抬升</b>、<b>GPIO 35+36 同時按重置</b>。
+      * 實體按鍵：<b>GPIO 35 前傾</b>、<b>GPIO 35+36 同時按重置</b>。
     </div>
   </div>
 
@@ -357,6 +357,31 @@
       await sendCmd(`T:${channel}`);
     }
 
+    // 機台重置確認機制 (需兩次確認)
+    async function confirmReset() {
+      if (!bleCharacteristic) {
+        alert("請先點擊上方「連線設備」連接藍芽！");
+        return;
+      }
+
+      // 第一次確認
+      const firstConfirm = confirm("⚠️ 警告：即將執行「機台重置」！\n這將會重置機台位置並關閉所有開關，確定要執行嗎？");
+      if (!firstConfirm) {
+        log("❌ 已取消機台重置 (第 1 次確認未通過)");
+        return;
+      }
+
+      // 第二次確認
+      const secondConfirm = confirm("🚨 再次確認：請確認機台周邊安全且人員已遠離！\n按下「確定」將立即發射重置指令，是否確認重置？");
+      if (!secondConfirm) {
+        log("❌ 已取消機台重置 (第 2 次確認未通過)");
+        return;
+      }
+
+      log("⚠️ 兩次確認通過，正在發送【機台重置】指令...");
+      await sendCmd('RESET');
+    }
+
     // 發送字串指令至 ESP32
     async function sendCmd(cmd) {
       if (!bleCharacteristic) {
@@ -374,4 +399,3 @@
   </script>
 </body>
 </html>
-
