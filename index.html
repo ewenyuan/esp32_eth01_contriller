@@ -1,31 +1,39 @@
+<!-- 【最後一版】ESP32-ETH01 + Bluefy 藍芽機台網頁控制端程式 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+  <!-- 設定網頁文字編碼為 UTF-8 (支援繁體中文) -->
   <meta charset="UTF-8">
+  <!-- 設定行動裝置檢視區 (寬度隨螢幕自動縮放，並停用雙擊縮放以防誤觸) -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- 網頁標題 -->
   <title>ESP32-ETH01 機台藍芽控制器 (Bluefy)</title>
+  
   <style>
+    /* CSS 全域變數定義 (配色主題風格) */
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent: #38bdf8;
-      --btn-off: #334155;
-      --btn-on: #10b981;
-      --btn-forward: #f59e0b;
-      --btn-reset: #ef4444;
-      --border: #475569;
+      --bg: #0f172a;               /* 網頁主背景色 (深藍黑) */
+      --card-bg: #1e293b;          /* 面板卡片背景色 (深藍灰) */
+      --text: #f8fafc;             /* 主文字顏色 (亮白) */
+      --text-muted: #94a3b8;       /* 次要提示文字顏色 (淺灰) */
+      --accent: #38bdf8;           /* 主題強調色 (天空藍) */
+      --btn-off: #334155;          /* 開關關閉時的背景色 (暗板岩灰) */
+      --btn-on: #10b981;           /* 開關開啟時的背景色 (翡翠綠) */
+      --btn-forward: #f59e0b;      /* 前傾按鈕預設顏色 (琥珀橘) */
+      --btn-reset: #ef4444;        /* 重置按鈕預設顏色 (警戒紅) */
+      --border: #475569;           /* 邊框線條顏色 */
     }
 
+    /* 全域盒模型重設與蘋果系統字型設定 */
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      -webkit-tap-highlight-color: transparent;
+      -webkit-tap-highlight-color: transparent; /* 停用點擊時的半透明灰色高亮框 */
     }
 
+    /* 網頁主體排版 */
     body {
       background-color: var(--bg);
       color: var(--text);
@@ -33,19 +41,22 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: center;        /* 水平置中 */
     }
 
+    /* 主容器寬度限制 (最佳適配手機版面) */
     .container {
       width: 100%;
       max-width: 480px;
     }
 
+    /* 頂部標題區排版 */
     header {
       text-align: center;
       margin-bottom: 20px;
     }
 
+    /* 頂部大標題樣式 */
     h1 {
       font-size: 1.35rem;
       font-weight: 700;
@@ -53,25 +64,28 @@
       margin-bottom: 6px;
     }
 
+    /* 藍芽連線狀態卡片 */
     .status-card {
       background-color: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px 16px;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      justify-content: space-between; /* 左右分散對齊 */
+      align-items: center;            /* 垂直居中 */
       margin-bottom: 16px;
     }
 
+    /* 狀態燈與文字組合 */
     .status-indicator {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 8px;                       /* 燈號與文字間距 */
       font-size: 0.95rem;
       font-weight: 500;
     }
 
+    /* 圓形狀態燈號 (預設紅色未連線) */
     .dot {
       width: 12px;
       height: 12px;
@@ -81,11 +95,13 @@
       transition: background-color 0.3s;
     }
 
+    /* 圓形狀態燈號 (綠色已連線樣式) */
     .dot.connected {
       background-color: #10b981;
       box-shadow: 0 0 8px #10b981;
     }
 
+    /* 連線按鈕樣式 */
     .btn-connect {
       background-color: var(--accent);
       color: #0f172a;
@@ -98,11 +114,12 @@
       transition: opacity 0.2s;
     }
 
+    /* 連線按鈕按壓回饋 */
     .btn-connect:active {
       opacity: 0.75;
     }
 
-    /* 12 開關按鈕網格 */
+    /* 12 組開關九宮格網格 (一行 3 欄) */
     .switch-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -110,30 +127,46 @@
       margin-bottom: 20px;
     }
 
+    /* 單顆開關按鈕樣式 */
     .switch-btn {
       background-color: var(--btn-off);
       color: var(--text-muted);
       border: 2px solid var(--border);
       border-radius: 12px;
-      height: 72px;
+      height: 76px;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       cursor: pointer;
+      transition: all 0.15s ease-out;
+      user-select: none;              /* 防止長按反白文字 */
+    }
+
+    /* 開關通道編號微標籤 (#1 ~ #12) */
+    .switch-btn .ch-tag {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+      opacity: 0.75;
+    }
+
+    /* 開關特效專屬名稱大字 (噴氣、環境水、掃腿、震背、震臀...) */
+    .switch-btn .sw-name {
       font-size: 1.05rem;
       font-weight: 700;
-      transition: all 0.15s ease-out;
-      user-select: none;
+      color: var(--text);
     }
 
+    /* 開關內部狀態小字 (ON / OFF) */
     .switch-btn .sub-text {
-      font-size: 0.75rem;
-      margin-top: 4px;
-      opacity: 0.8;
-      font-weight: normal;
+      font-size: 0.72rem;
+      margin-top: 3px;
+      opacity: 0.85;
+      font-weight: 600;
     }
 
+    /* 開關處於 ON 狀態時的高亮樣式 (綠底白字發光) */
     .switch-btn.on {
       background-color: var(--btn-on);
       border-color: #34d399;
@@ -142,7 +175,15 @@
       transform: scale(0.98);
     }
 
-    /* 特殊控制按鈕 (輔助) */
+    .switch-btn.on .ch-tag {
+      color: #d1fae5;                 /* 開啟時微標籤文字偏亮綠白 */
+    }
+
+    .switch-btn.on .sw-name {
+      color: #ffffff;                 /* 開啟時特效名稱文字維持純白 */
+    }
+
+    /* 底部輔助按鈕排列區 (3 欄) */
     .actions {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -150,6 +191,7 @@
       margin-bottom: 16px;
     }
 
+    /* 輔助按鈕通用樣式 */
     .action-btn {
       border: none;
       border-radius: 10px;
@@ -158,26 +200,51 @@
       font-size: 0.9rem;
       cursor: pointer;
       color: white;
-      transition: opacity 0.2s;
+      transition: all 0.2s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
     }
 
+    /* 輔助按鈕按壓效果 */
     .action-btn:active {
       opacity: 0.7;
     }
 
+    /* 全部開關 OFF 按鈕顏色 */
     .btn-all-off {
       background-color: #64748b;
     }
 
+    /* 機台前傾按鈕預設顏色 */
     .btn-forward {
       background-color: var(--btn-forward);
+      border: 2px solid transparent;
     }
 
+    /* 「機台前傾」按鈕動作中時的高亮呼吸燈樣式 (接收實體按鍵 04 或網頁點擊同步) */
+    .btn-forward.active {
+      background-color: #d97706 !important;                     /* 較深飽和的橘黃色 */
+      border: 2px solid #fef08a !important;                     /* 亮黃邊框 */
+      color: #ffffff !important;                                 /* 白字 */
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.9) !important;  /* 橘色光暈 */
+      animation: pulseForward 1.2s infinite ease-in-out;        /* 循環呼吸動畫 */
+    }
+
+    /* 呼吸動畫關鍵影格定義 */
+    @keyframes pulseForward {
+      0%   { transform: scale(1); opacity: 1; }
+      50%  { transform: scale(0.96); opacity: 0.85; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* 機台重置按鈕顏色 */
     .btn-reset {
       background-color: var(--btn-reset);
     }
 
-    /* 狀態記錄 */
+    /* 底部通訊接收除錯日誌窗 */
     .log-box {
       background-color: #0b1120;
       border: 1px solid var(--border);
@@ -187,11 +254,12 @@
       font-size: 0.75rem;
       color: #38bdf8;
       height: 90px;
-      overflow-y: auto;
+      overflow-y: auto;               /* 超過高度自動顯示滾動條 */
       text-align: left;
-      white-space: pre-wrap;
+      white-space: pre-wrap;          /* 保留換行 */
     }
 
+    /* 底部說明文字 */
     .hint {
       margin-top: 12px;
       font-size: 0.8rem;
@@ -202,86 +270,139 @@
   </style>
 </head>
 <body>
+  <!-- 主容器 -->
   <div class="container">
+    <!-- 頁頭 -->
     <header>
       <h1>機台藍芽控制面板</h1>
       <p style="font-size: 0.85rem; color: var(--text-muted);">ESP32-ETH01 + Bluefy Web Bluetooth</p>
     </header>
 
-    <!-- 連線卡片 -->
+    <!-- 藍芽連線狀態卡片 -->
     <div class="status-card">
       <div class="status-indicator">
+        <!-- 狀態圓點 -->
         <div id="dot" class="dot"></div>
+        <!-- 狀態文字 (未連線 / 已連線) -->
         <span id="status-text">未連線</span>
       </div>
+      <!-- 連線切換按鈕 -->
       <button id="btn-connect" class="btn-connect" onclick="toggleConnect()">連線設備</button>
     </div>
 
-    <!-- 12 開關獨立切換面板 -->
-    <div class="switch-grid" id="switch-grid">
-      <!-- 由 JS 動態生成 12 顆按鈕 -->
-    </div>
+    <!-- 12 組開關獨立切換按鈕容器 (由 JS 動態產生，依序對應 12 種特效) -->
+    <div class="switch-grid" id="switch-grid"></div>
 
-    <!-- 輔助動作區 -->
+    <!-- 輔助動作區 (全部關閉 / 機台前傾 / 機台重置) -->
     <div class="actions">
+      <!-- 全部關閉按鈕 -->
       <button class="action-btn btn-all-off" onclick="sendCmd('ALL_OFF')">全部開關 OFF</button>
-      <button class="action-btn btn-forward" onclick="sendCmd('LIFT')">機台前傾</button>
+      
+      <!-- 機台前傾按鈕 (支援動作中動態高亮) -->
+      <button id="btn-forward" class="action-btn btn-forward" onclick="sendCmd('LIFT')">機台前傾</button>
+      
+      <!-- 機台重置按鈕 (具備兩次彈跳確認) -->
       <button class="action-btn btn-reset" onclick="confirmReset()">機台重置</button>
     </div>
 
-    <!-- 接收日誌 -->
+    <!-- 即時除錯日誌視窗 -->
     <div id="log" class="log-box">系統就緒，請點擊上方「連線設備」連接 ESP32...</div>
 
+    <!-- 底部硬體與使用提示 -->
     <div class="hint">
       * 建議使用 iOS <b>Bluefy App</b> 或支援 Web Bluetooth 之瀏覽器開啟。<br>
-      * 實體按鍵：<b>GPIO 35 前傾</b>、<b>GPIO 35+36 同時按重置</b>。
+      * 實體按鍵：<b>GPIO 04 前傾</b>、<b>GPIO 04+14 同時按重置</b>。
     </div>
   </div>
 
+  <!-- JavaScript 控制邏輯程式碼 -->
   <script>
+    // 定義與 ESP32 韌體完全對應的 BLE 服務 UUID
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    // 定義與 ESP32 韌體完全對應的特徵值 UUID
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-    let bluetoothDevice = null;
-    let bleCharacteristic = null;
-    let switchStates = new Array(12).fill(false);
+    // ⭐【12 組開關專屬特效名稱配置表】：開關 1 到 12 依序設定完整名稱
+    const switchNames = [
+      "噴氣",     // 開關 1
+      "環境水",   // 開關 2
+      "掃腿",     // 開關 3
+      "震背",     // 開關 4
+      "震臀",     // 開關 5
+      "環境光",   // 開關 6
+      "環境風",   // 開關 7
+      "環境霧",   // 開關 8
+      "閃燈",     // 開關 9
+      "吹風",     // 開關 10
+      "氣味",     // 開關 11
+      "煙霧扇"    // 開關 12
+    ];
 
-    // 建立 12 顆開關 UI
-    const grid = document.getElementById("switch-grid");
+    let bluetoothDevice = null;       // 記錄目前配對的藍芽裝置物件
+    let bleCharacteristic = null;     // 記錄可讀寫的特徵值物件
+    let switchStates = new Array(12).fill(false); // 記錄 12 組開關當前的開關狀態 (預設全 false)
+
+    // 動態於網頁建立 12 組開關按鈕
+    const grid = document.getElementById("switch-grid"); // 取得九宮格容器元素
     for (let i = 1; i <= 12; i++) {
-      const btn = document.createElement("div");
-      btn.className = "switch-btn";
-      btn.id = `sw-${i}`;
-      btn.innerHTML = `<div>開關 ${i}</div><div class="sub-text" id="sw-sub-${i}">OFF</div>`;
+      const btn = document.createElement("div");        // 建立 div 元素
+      btn.className = "switch-btn";                     // 指派按鈕 CSS 樣式
+      btn.id = `sw-${i}`;                               // 設定獨立 ID (sw-1 ~ sw-12)
+      
+      const effectName = switchNames[i - 1];            // 取得對應的專屬特效名稱
+
+      // 按鈕內部 HTML：通道標籤 (#1~#12) + 特效名稱 + ON/OFF 狀態標籤
+      btn.innerHTML = `
+        <div class="ch-tag">開關 ${i}</div>
+        <div class="sw-name">${effectName}</div>
+        <div class="sub-text" id="sw-sub-${i}">OFF</div>
+      `;
+      // 綁定點擊事件呼叫切換函式
       btn.onclick = () => toggleSwitch(i);
-      grid.appendChild(btn);
+      grid.appendChild(btn);                            // 加入至網格中
     }
 
+    // 印出除錯日誌至下方黑色日誌框中
     function log(msg) {
-      const box = document.getElementById("log");
-      const time = new Date().toLocaleTimeString();
-      box.textContent = `[${time}] ${msg}\n` + box.textContent;
+      const box = document.getElementById("log");       // 取得日誌框元素
+      const time = new Date().toLocaleTimeString();     // 取得當前本機時間
+      box.textContent = `[${time}] ${msg}\n` + box.textContent; // 最新的日誌放在最上方
     }
 
-    // 更新 UI 狀態
+    // 更新 UI 狀態 (解析 12 碼開關狀態 + 第 13 碼前傾狀態)
     function updateUI(statusString) {
+      // 1. 解析前 12 碼：開關 1 ~ 12 的 ON/OFF
       for (let i = 0; i < 12; i++) {
-        const isOn = (statusString.charAt(i) === '1');
-        switchStates[i] = isOn;
-        const btn = document.getElementById(`sw-${i + 1}`);
-        const sub = document.getElementById(`sw-sub-${i + 1}`);
+        const isOn = (statusString.charAt(i) === '1');  // 字元為 '1' 代表 ON，'0' 代表 OFF
+        switchStates[i] = isOn;                         // 更新本地開關記憶
+        const btn = document.getElementById(`sw-${i + 1}`); // 取得按鈕 DOM
+        const sub = document.getElementById(`sw-sub-${i + 1}`); // 取得小字標籤 DOM
         if (isOn) {
-          btn.classList.add("on");
-          sub.textContent = "ON";
+          btn.classList.add("on");                      // 加入高亮綠色樣式
+          sub.textContent = "ON";                       // 文字顯示 ON
         } else {
-          btn.classList.remove("on");
-          sub.textContent = "OFF";
+          btn.classList.remove("on");                   // 移除高亮樣式
+          sub.textContent = "OFF";                      // 文字顯示 OFF
+        }
+      }
+
+      // 2. 解析第 13 碼 (字串索引 12)：實體或網頁前傾狀態顯示
+      const forwardBtn = document.getElementById("btn-forward"); // 取得前傾按鈕
+      if (statusString.length >= 13) {                  // 確認字串長度足夠包含前傾旗標
+        const isForward = (statusString.charAt(12) === '1'); // '1' 代表前傾動作中，'0' 代表一般狀態
+        if (isForward) {
+          forwardBtn.classList.add("active");           // 啟動高亮呼吸動畫
+          forwardBtn.textContent = "機台前傾 (動作中)"; // 文字變更為動作中
+        } else {
+          forwardBtn.classList.remove("active");        // 恢復一般按鈕外觀
+          forwardBtn.textContent = "機台前傾";          // 恢復預設文字
         }
       }
     }
 
-    // 連線 / 斷開藍芽
+    // 連線 / 中斷藍芽連線切換函式
     async function toggleConnect() {
+      // 若目前已處於連線狀態，則執行中斷連線
       if (bluetoothDevice && bluetoothDevice.gatt.connected) {
         disconnect();
         return;
@@ -289,108 +410,117 @@
 
       try {
         log("正在掃描藍芽裝置 [ESP32-Machine-Ctrl]...");
+        // 呼叫 Web Bluetooth API 請求裝置
         bluetoothDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "ESP32-Machine-Ctrl" }],
-          optionalServices: [SERVICE_UUID]
+          filters: [{ name: "ESP32-Machine-Ctrl" }],    // 過濾指定廣播名稱
+          optionalServices: [SERVICE_UUID]              // 宣告需存取的服務 UUID
         });
 
+        // 監聽意外斷線事件
         bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
         log("正在連線至 GATT 伺服器...");
-        const server = await bluetoothDevice.gatt.connect();
+        const server = await bluetoothDevice.gatt.connect(); // 連接至 GATT Server
 
         log("正在獲取控制器服務...");
-        const service = await server.getPrimaryService(SERVICE_UUID);
+        const service = await server.getPrimaryService(SERVICE_UUID); // 取得主要服務
 
         log("正在獲取通訊特徵值...");
-        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID); // 取得特徵值
 
-        // 啟動 Notification 即時監聽 ESP32 回傳狀態
+        // 啟動 Notification (訂閱 ESP32 的狀態推播)
         await bleCharacteristic.startNotifications();
+        // 監聽特徵值數值變更事件 (當 ESP32 發出 notify 時會自動觸發)
         bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
 
-        // 讀取當前狀態
+        // 主動讀取一次 ESP32 目前的初始狀態
         const initVal = await bleCharacteristic.readValue();
         const initStr = new TextDecoder().decode(initVal);
         if (initStr && initStr.length >= 12) {
-          updateUI(initStr);
+          updateUI(initStr);                            // 根據讀到的字串刷新 UI 畫面
         }
 
-        document.getElementById("dot").classList.add("connected");
-        document.getElementById("status-text").textContent = "已連線";
-        document.getElementById("btn-connect").textContent = "中斷連線";
+        // 更新連線狀態 UI
+        document.getElementById("dot").classList.add("connected"); // 圓點變綠色
+        document.getElementById("status-text").textContent = "已連線"; // 文字顯示已連線
+        document.getElementById("btn-connect").textContent = "中斷連線"; // 按鈕文字變更
         log("藍芽連線成功！");
       } catch (err) {
         log("連線失敗: " + err);
-        disconnect();
+        disconnect();                                   // 失敗時執行清理
       }
     }
 
+    // 接收 ESP32 BLE 推播通知回呼函式
     function handleNotification(event) {
-      const valStr = new TextDecoder().decode(event.target.value);
-      log("同步狀態: " + valStr);
+      const valStr = new TextDecoder().decode(event.target.value); // 解碼二進位資料為字串
+      log("同步狀態: " + valStr);                       // 印出收到的狀態碼 (如 0000000000001)
       if (valStr && valStr.length >= 12) {
-        updateUI(valStr);
+        updateUI(valStr);                               // 立即刷新畫面上的 12 開關與前傾狀態！
       }
     }
 
+    // 斷線狀態還原處理
     function onDisconnected() {
-      document.getElementById("dot").classList.remove("connected");
-      document.getElementById("status-text").textContent = "未連線";
-      document.getElementById("btn-connect").textContent = "連線設備";
+      document.getElementById("dot").classList.remove("connected"); // 圓點變回紅色
+      document.getElementById("status-text").textContent = "未連線"; // 顯示未連線
+      document.getElementById("btn-connect").textContent = "連線設備"; // 按鈕變回連線設備
       log("藍芽設備已中斷連線。");
     }
 
+    // 主動中斷連線
     function disconnect() {
       if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-        bluetoothDevice.gatt.disconnect();
+        bluetoothDevice.gatt.disconnect();              // 呼叫中斷函式
       }
       onDisconnected();
     }
 
-    // 點擊開關發送指令 (Toggle)
+    // 點擊開關發送反轉指令 (Toggle: T:1 ~ T:12)
     async function toggleSwitch(channel) {
       if (!bleCharacteristic) {
         alert("請先點擊上方「連線設備」連接藍芽！");
         return;
       }
-      await sendCmd(`T:${channel}`);
+      const name = switchNames[channel - 1];            // 取得對應特效名稱
+      log(`觸發切換 ➡️ 開關 ${channel} (${name})`);
+      await sendCmd(`T:${channel}`);                    // 送出 T:編號 指令
     }
 
-    // 機台重置確認機制 (需兩次確認)
+    // 機台重置雙重確認防呆機制
     async function confirmReset() {
       if (!bleCharacteristic) {
         alert("請先點擊上方「連線設備」連接藍芽！");
         return;
       }
 
-      // 第一次確認
+      // 第 1 次跳出確認對話框
       const firstConfirm = confirm("⚠️ 警告：即將執行「機台重置」！\n這將會重置機台位置並關閉所有開關，確定要執行嗎？");
       if (!firstConfirm) {
         log("❌ 已取消機台重置 (第 1 次確認未通過)");
-        return;
+        return;                                         // 取消則退出，不發送任何指令
       }
 
-      // 第二次確認
+      // 第 2 次跳出再次確認對話框
       const secondConfirm = confirm("🚨 再次確認：請確認機台周邊安全且人員已遠離！\n按下「確定」將立即發射重置指令，是否確認重置？");
       if (!secondConfirm) {
         log("❌ 已取消機台重置 (第 2 次確認未通過)");
-        return;
+        return;                                         // 取消則退出，不發送任何指令
       }
 
       log("⚠️ 兩次確認通過，正在發送【機台重置】指令...");
-      await sendCmd('RESET');
+      await sendCmd('RESET');                           // 兩次皆同意才發出 RESET 指令
     }
 
-    // 發送字串指令至 ESP32
+    // 透過 BLE 寫入字串指令至 ESP32
     async function sendCmd(cmd) {
       if (!bleCharacteristic) {
         alert("請先點擊上方「連線設備」連接藍芽！");
         return;
       }
       try {
-        const encoder = new TextEncoder();
-        await bleCharacteristic.writeValue(encoder.encode(cmd));
+        const encoder = new TextEncoder();              // 建立文字編碼器
+        await bleCharacteristic.writeValue(encoder.encode(cmd)); // 寫入 UTF-8 位元組資料
         log("已發送指令 ➡️ " + cmd);
       } catch (err) {
         log("發送指令失敗: " + err);
