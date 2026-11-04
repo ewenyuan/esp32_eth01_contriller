@@ -253,7 +253,7 @@
       font-family: monospace;
       font-size: 0.75rem;
       color: #38bdf8;
-      height: 90px;
+      height: 105px;                  /* 增加高度更方便完整檢視姿態資料 */
       overflow-y: auto;               /* 超過高度自動顯示滾動條 */
       text-align: left;
       white-space: pre-wrap;          /* 保留換行 */
@@ -322,7 +322,7 @@
     // 定義與 ESP32 韌體完全對應的特徵值 UUID
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-    // ⭐【12 組開關專屬特效名稱配置表】：開關 1 到 12 依序設定完整名稱
+    // 12 組開關專屬特效名稱配置表 (開關 1 到 12 依序對應)
     const switchNames = [
       "噴氣",     // 開關 1
       "環境水",   // 開關 2
@@ -438,6 +438,8 @@
         const initStr = new TextDecoder().decode(initVal);
         if (initStr && initStr.length >= 12) {
           updateUI(initStr);                            // 根據讀到的字串刷新 UI 畫面
+          // ⭐ 初始連線同步狀態時，僅顯示前 12 碼開關
+          log("同步狀態: " + initStr.substring(0, 12));
         }
 
         // 更新連線狀態 UI
@@ -451,12 +453,25 @@
       }
     }
 
-    // 接收 ESP32 BLE 推播通知回呼函式
+    // ⭐【修改位置】：接收 ESP32 BLE 推播通知回呼函式
     function handleNotification(event) {
       const valStr = new TextDecoder().decode(event.target.value); // 解碼二進位資料為字串
-      log("同步狀態: " + valStr);                       // 印出收到的狀態碼 (如 0000000000001)
+
+      // 1. ⭐ 同步狀態「只顯示 12 個開關」：使用 substring(0, 12) 去除第 13 碼機台狀態標示
+      const switchesOnly = (valStr.length >= 12) ? valStr.substring(0, 12) : valStr;
+      log("同步狀態: " + switchesOnly);
+
+      // 2. ⭐ 顯示實際發出的姿態資料 (Byte 20~31 十六進位格式)
+      // 若為完全重置 (全 0) 則顯示歸零姿態；前傾或開關動作時顯示實際前傾姿態資料
+      const isResetState = (valStr.startsWith("000000000000") && (valStr.length < 13 || valStr.charAt(12) === '0'));
+      const postureData = isResetState
+        ? "0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00"
+        : "0x00, 0x06, 0x2E, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x2E, 0x08";
+      log("姿態資料: " + postureData);
+
+      // 3. 呼叫 UI 更新 (內部仍使用完整字串來驅動開關綠燈與前傾呼吸燈)
       if (valStr && valStr.length >= 12) {
-        updateUI(valStr);                               // 立即刷新畫面上的 12 開關與前傾狀態！
+        updateUI(valStr);
       }
     }
 
@@ -521,7 +536,12 @@
       try {
         const encoder = new TextEncoder();              // 建立文字編碼器
         await bleCharacteristic.writeValue(encoder.encode(cmd)); // 寫入 UTF-8 位元組資料
-        log("已發送指令 ➡️ " + cmd);
+        
+        // ⭐ 發送指令時同步顯示對應姿態
+        const posture = (cmd === 'RESET')
+          ? "0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00"
+          : "0x00, 0x06, 0x2E, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x2E, 0x08";
+        log(`已發送指令 ➡️ ${cmd} (姿態: ${posture})`);
       } catch (err) {
         log("發送指令失敗: " + err);
       }
