@@ -498,8 +498,7 @@
         return;
       }
       const name = switchNames[channel - 1];            // 取得對應特效名稱
-      log(`觸發切換 ➡️ 開關 ${channel} (${name})`);
-      await sendCmd(`T:${channel}`);                    // 送出 T:編號 指令
+      await sendCmd(`T:${channel}`);                    // 送出 T:編號 指令 (移除「觸發切換」顯示)
     }
 
     // 機台重置雙重確認防呆機制
@@ -541,7 +540,7 @@
         const posture = (cmd === 'RESET')
           ? "0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00"
           : "0x00, 0x06, 0x2E, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x2E, 0x08";
-        log(`已發送指令 ➡️ ${cmd} (姿態: ${posture})`);
+        // ⭐【移除「已發送指令」顯示】：指令發送後不再顯示已發送訊息，僅保留 handleNotification 中的姿態資料與同步狀態
       } catch (err) {
         log("發送指令失敗: " + err);
       }
